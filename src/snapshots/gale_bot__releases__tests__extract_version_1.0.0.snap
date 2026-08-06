@@ -1,0 +1,7 @@
+---
+source: src/releases.rs
+expression: changes
+---
+### Added
+
+- `Open game directory` button to File menu

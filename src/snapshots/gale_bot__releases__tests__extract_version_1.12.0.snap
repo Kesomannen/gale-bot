@@ -1,0 +1,17 @@
+---
+source: src/releases.rs
+expression: changes
+---
+### Added
+
+- More locales:
+  - Brazilian Portugese
+  - Polish
+  - Spanish
+
+### Fixed
+
+- Duplicate mods causing the profile screen to freeze the UI (thanks [@TianMengLucky](https://github.com/TianMengLucky))
+- Replaced some unlocalized text (thanks [@TianMengLucky](https://github.com/TianMengLucky))
+- Weird text appearing in the unknown-mods banner
+- Launch mode settings not persisting after switching tabs

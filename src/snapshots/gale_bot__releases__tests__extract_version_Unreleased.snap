@@ -1,0 +1,22 @@
+---
+source: src/releases.rs
+expression: changes
+---
+### Added
+
+- Button to view changelogs in the update dialog
+- Support for Steam launch options (thanks [@hazre](https://github.com/hazre))
+
+### Changed
+
+- Cross-source updates are now clearly marked in the update mods dialog
+- Game icons are now sourced from Thunderstore rather than being bundled by Gale
+
+### Fixed
+
+- Mods sometimes not being installed until Gale is restarted
+- Search bar being cleared after a config file is deleted
+- Clipping issues with the unknown mods banner
+- Mod card lists such as the dependencies and hidden mods dialogs not being sorted correctly
+- Icons and links in update dialog always pointing to Thunderstore
+- Install button being stuck in a disabled state after installing mods
