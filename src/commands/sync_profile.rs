@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use poise::{
     CreateReply,
@@ -58,20 +58,44 @@ struct ModVersion {
 pub async fn syncprofile(ctx: Context<'_>, code: String) -> Result {
     let start = Instant::now();
 
+    let code = code.trim();
+
     let url = format!("https://gale.kesomannen.com/api/profile/{code}/meta");
     let response = ctx.data().http.get(&url).send().await?.error_for_status()?;
 
     let elapsed = start.elapsed();
 
+    let metadata = response.json().await?;
+
+    let embed = create_embed(metadata, elapsed);
+
+    let buttons = CreateActionRow::Buttons(vec![
+        CreateButton::new_link(format!(
+            "https://gale.kesomannen.com/api/desktop/profile/sync/clone/{code}",
+        ))
+        .label("Import"),
+    ]);
+
+    let reply = CreateReply::default()
+        .embed(embed)
+        .components(vec![buttons])
+        .reply(true);
+
+    ctx.send(reply).await?;
+
+    Ok(())
+}
+
+fn create_embed(metadata: ProfileMetadata, elapsed: Duration) -> CreateEmbed {
     let ProfileMetadata {
         id,
         created_at,
         updated_at,
         owner,
         manifest,
-    } = response.json().await?;
+    } = metadata;
 
-    let embed = CreateEmbed::default()
+    CreateEmbed::default()
         .author({
             let mut embed = CreateEmbedAuthor::new(owner.display_name)
                 .url(format!("https://discord.com/users/{}", owner.discord_id));
@@ -91,8 +115,8 @@ pub async fn syncprofile(ctx: Context<'_>, code: String) -> Result {
                 .map(|c| ("Game", c, false))
                 .into_iter()
                 .chain([
-                    ("Created at", format_date(created_at), false),
-                    ("Updated at", format_date(updated_at), false),
+                    ("Created at", format_date(&created_at), false),
+                    ("Updated at", format_date(&updated_at), false),
                     ("Mod Count", manifest.mods.len().to_string(), false),
                 ]),
         )
@@ -100,25 +124,9 @@ pub async fn syncprofile(ctx: Context<'_>, code: String) -> Result {
             "Fetched in {}ms",
             elapsed.as_millis()
         )))
-        .color(crate::GALE_BLUE);
-
-    let buttons = CreateActionRow::Buttons(vec![
-        CreateButton::new_link(format!(
-            "https://gale.kesomannen.com/api/desktop/profile/sync/clone/{id}",
-        ))
-        .label("Import"),
-    ]);
-
-    let reply = CreateReply::default()
-        .embed(embed)
-        .components(vec![buttons])
-        .reply(true);
-
-    ctx.send(reply).await?;
-
-    Ok(())
+        .color(crate::constants::GALE_BLUE)
 }
 
-fn format_date(timestamp: jiff::Timestamp) -> String {
+fn format_date(timestamp: &jiff::Timestamp) -> String {
     timestamp.strftime("%Y-%m-%d %H:%M:%S").to_string()
 }

@@ -1,0 +1,5 @@
+[releases]
+channel_id = "1306490214314803222"
+ping_role_id = "1541472266695745637"
+changelog_url = "https://raw.githubusercontent.com/Kesomannen/gale/refs/heads/master/CHANGELOG.md"
+port = 8080

@@ -3,7 +3,7 @@ use std::{env, pin::Pin, sync::Arc};
 use anyhow::Context as _;
 use poise::serenity_prelude::{self as serenity};
 use tokio::net::TcpListener;
-use tracing::{Level, error, info};
+use tracing::{Level, debug, error, info};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -18,8 +18,8 @@ async fn main() {
         )
         .init();
 
-    if let Err(e) = try_main().await {
-        eprintln!("{e:?}");
+    if let Err(err) = try_main().await {
+        error!(?err, "fatal error");
         std::process::exit(1);
     }
 }
@@ -50,6 +50,23 @@ fn on_error(
     })
 }
 
+fn read_config() -> anyhow::Result<gale_bot::Config> {
+    use figment::{
+        Figment,
+        providers::{Env, Format, Toml},
+    };
+
+    let config: gale_bot::Config = Figment::new()
+        .merge(Toml::file("gale-bot.toml"))
+        .merge(Toml::file("/etc/gale-bot/config.toml"))
+        .merge(Env::prefixed("GALE_BOT_"))
+        .extract()?;
+
+    debug!(?config, "loaded config");
+
+    Ok(config)
+}
+
 async fn try_main() -> anyhow::Result<()> {
     let reqwest_client = reqwest::Client::builder()
         .user_agent(format!("gale-bot/{}", env!("CARGO_PKG_VERSION")))
@@ -58,6 +75,7 @@ async fn try_main() -> anyhow::Result<()> {
 
     let state = gale_bot::State {
         http: reqwest_client.clone(),
+        config: read_config().map(Arc::new)?,
     };
 
     let token = env::var("DISCORD_TOKEN").context("DISCORD_TOKEN not set")?;
@@ -102,21 +120,14 @@ async fn start_release_webhook_listener(
     state: gale_bot::State,
     http: Arc<serenity::Http>,
 ) -> anyhow::Result<()> {
-    let port = env::var("RELEASE_WEBHOOK_PORT")
-        .unwrap_or_else(|_| "8080".to_string())
-        .parse::<u16>()
-        .context("failed to parse RELEASE_WEBHOOK_PORT")?;
-
-    let secret = env::var("RELEASE_WEBHOOK_SECRET")
-        .map(gale_bot::releases::GithubWebhookSecret::new)
-        .context("RELEASE_WEBHOOK_SECRET not set")?;
+    let port = state.config.releases.port;
 
     info!(port, "listening for release webhooks");
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
 
     tokio::spawn(async {
-        match gale_bot::releases::listen(state, http, listener, secret).await {
+        match gale_bot::releases::listen(state, http, listener).await {
             Ok(_) => {}
             Err(err) => {
                 error!(?err, "failed to run release webhook listener");

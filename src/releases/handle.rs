@@ -3,17 +3,12 @@ use std::fmt::Display;
 use anyhow::Context;
 use octocrab::models::webhook_events::payload::ReleaseWebhookEventAction;
 use poise::serenity_prelude::{
-    ChannelId, CreateEmbed, CreateMessage, EditMessage, GetMessages, Http, RoleId,
+    self as serenity, CreateEmbed, CreateMessage, EditMessage, GetMessages, MessageId,
 };
 use serde::Deserialize;
 use tracing::{info, instrument};
 
 use crate::prelude::*;
-
-const CHANNEL_ID: ChannelId = ChannelId::new(1357970229950418995);
-const PING_ROLE_ID: RoleId = RoleId::new(1306715991878664242);
-const CHANGELOG_URL: &str =
-    "https://raw.githubusercontent.com/Kesomannen/gale/refs/heads/master/CHANGELOG.md";
 
 #[derive(Debug, PartialEq, Eq, PartialOrd)]
 struct DownloadAsset {
@@ -74,10 +69,11 @@ impl Ord for DownloadAsset {
     }
 }
 
-#[instrument(skip(state, http, release), fields(version = release.tag_name))]
+#[instrument(skip(http, discord_http, config, release), fields(version = release.tag_name))]
 pub async fn handle_webhook(
-    state: &State,
-    http: &Http,
+    http: &reqwest::Client,
+    discord_http: &serenity::Http,
+    config: &super::Config,
     action: ReleaseWebhookEventAction,
     release: GithubRelease,
 ) -> Result {
@@ -89,34 +85,26 @@ pub async fn handle_webhook(
 
     downloads.sort();
 
-    let embed = create_update_embed(state, &release.tag_name, downloads).await?;
+    let embed = create_update_embed(http, config, &release.tag_name, downloads).await?;
 
     match action {
         ReleaseWebhookEventAction::Created => {
-            send_update_notification(http, &release.tag_name, embed).await
+            send_update_notification(discord_http, config, &release.tag_name, embed).await
         }
         ReleaseWebhookEventAction::Edited => {
-            let messages = CHANNEL_ID
-                .messages(http, GetMessages::default().limit(1))
+            let messages = config
+                .channel_id
+                .messages(discord_http, GetMessages::default().limit(1))
                 .await
                 .context("failed to fetch messages")?;
 
             match messages.first() {
                 Some(message) if message.content.contains(&release.tag_name) => {
-                    info!("editing existing release notification message");
-
-                    let edit = EditMessage::default().embed(embed);
-
-                    CHANNEL_ID
-                        .edit_message(http, message.id, edit)
-                        .await
-                        .context("failed to edit message")?;
-
-                    Ok(())
+                    edit_update_notification(discord_http, config, message.id, embed).await
                 }
                 _ => {
                     info!("no existing release notification message found, sending a new one");
-                    send_update_notification(http, &release.tag_name, embed).await
+                    send_update_notification(discord_http, config, &release.tag_name, embed).await
                 }
             }
         }
@@ -127,25 +115,51 @@ pub async fn handle_webhook(
     }
 }
 
-async fn send_update_notification(http: &Http, version: &str, embed: CreateEmbed) -> Result {
+async fn send_update_notification(
+    discord_http: &serenity::Http,
+    config: &super::Config,
+    version: &str,
+    embed: CreateEmbed,
+) -> Result {
     let message = CreateMessage::default()
-        .content(format!("<@&{}> ||{version}||", PING_ROLE_ID))
+        .content(format!("<@&{}> ||{version}||", config.ping_role_id))
         .embed(embed);
 
-    CHANNEL_ID
-        .send_message(http, message)
+    config
+        .channel_id
+        .send_message(discord_http, message)
         .await
         .context("failed to send message")?;
 
     Ok(())
 }
 
+async fn edit_update_notification(
+    discord_http: &serenity::Http,
+    config: &super::Config,
+    message_id: MessageId,
+    embed: CreateEmbed,
+) -> Result {
+    info!("editing existing release notification message");
+
+    let edit = EditMessage::default().embed(embed);
+
+    config
+        .channel_id
+        .edit_message(discord_http, message_id, edit)
+        .await
+        .context("failed to edit message")?;
+
+    Ok(())
+}
+
 async fn create_update_embed(
-    state: &State,
+    http: &reqwest::Client,
+    config: &super::Config,
     version: &str,
     downloads: Vec<DownloadAsset>,
 ) -> Result<CreateEmbed> {
-    let changes = get_version_changes(state, version).await?;
+    let changes = get_version_changes(http, config, version).await?;
 
     let downloads_list = downloads
         .iter()
@@ -163,7 +177,7 @@ async fn create_update_embed(
     let embed = CreateEmbed::default()
         .title("A new update released!")
         .description(description)
-        .color(crate::GALE_BLUE);
+        .color(crate::constants::GALE_BLUE);
 
     // let message = CreateMessage::default()
     //     .content(format!("<@&{}>", PING_ROLE_ID))
@@ -172,8 +186,12 @@ async fn create_update_embed(
     Ok(embed)
 }
 
-async fn get_version_changes(state: &State, version: &str) -> Result<String> {
-    let changelog = fetch_changelog(state).await?;
+async fn get_version_changes(
+    http: &reqwest::Client,
+    config: &super::Config,
+    version: &str,
+) -> Result<String> {
+    let changelog = fetch_changelog(http, &config.changelog_url).await?;
     extract_version_changes(&changelog, version)
 }
 
@@ -199,10 +217,9 @@ fn extract_version_changes(changelog: &str, version: &str) -> Result<String> {
     Ok(changes.trim().to_string())
 }
 
-async fn fetch_changelog(state: &State) -> Result<String> {
-    let changelog = state
-        .http
-        .get(CHANGELOG_URL)
+async fn fetch_changelog(http: &reqwest::Client, url: &str) -> Result<String> {
+    let changelog = http
+        .get(url)
         .send()
         .await?
         .error_for_status()?
