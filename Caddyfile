@@ -1,0 +1,7 @@
+shinobu.lysator.liu.se {
+    reverse_proxy bot:8080
+}
+
+localhost {
+    reverse_proxy bot:8080
+}

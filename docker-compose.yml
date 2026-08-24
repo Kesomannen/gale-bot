@@ -4,10 +4,32 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - 8080:8080
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - GALE_BOT_RELEASES=${GALE_BOT_RELEASES}
       - RUST_LOG=info,gale_bot=debug
     volumes:
       - ./gale-bot-production.toml:/etc/gale-bot/config.toml:ro
+    networks:
+      - botnet
+  
+  caddy:
+    image: caddy:2.11.4-alpine
+    ports:
+      - 6766:80
+      - 6767:443
+    networks:
+      - botnet
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  botnet:
+    
