@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev
 
 RUN --mount=type=bind,source=src,target=src \
-    --mount=type=bind,source=gale-bot-production.toml,target=gale-bot-production.toml \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
     --mount=type=cache,target=/app/target/ \
