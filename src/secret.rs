@@ -8,7 +8,7 @@ pub struct Secret<T>(pub T);
 
 impl<T> Debug for Secret<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Secret")
+        f.debug_struct("Secret").finish()
     }
 }
 
