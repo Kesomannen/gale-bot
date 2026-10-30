@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /bin/server /bin/
-COPY --from=build /app/gale-bot-production.toml /etc/gale-bot/config.toml
+COPY ./gale-bot-production.toml /etc/gale-bot/config.toml
 
 EXPOSE 8080
 
