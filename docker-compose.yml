@@ -11,9 +11,3 @@ services:
       - RUST_LOG=info,gale_bot=debug
     volumes:
       - ./gale-bot-production.toml:/etc/gale-bot/config.toml:ro
-    networks:
-      - botnet
-
-networks:
-  botnet:
-    
