@@ -7,7 +7,7 @@ services:
       - ${GALE_BOT_PORT:-8080}:8080
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - GALE_BOT_RELEASES=${GALE_BOT_RELEASES}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - RUST_LOG=info,gale_bot=debug
     volumes:
       - ./gale-bot-production.toml:/etc/gale-bot/config.toml:ro

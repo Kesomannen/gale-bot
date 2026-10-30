@@ -1,9 +1,10 @@
 use std::{env, pin::Pin, sync::Arc};
 
 use anyhow::Context as _;
+use gale_bot::releases::GithubWebhookSecret;
 use poise::serenity_prelude::{self as serenity};
 use tokio::net::TcpListener;
-use tracing::{Level, debug, error, info};
+use tracing::{Level, debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -53,13 +54,12 @@ fn on_error(
 fn read_config() -> anyhow::Result<gale_bot::Config> {
     use figment::{
         Figment,
-        providers::{Env, Format, Toml},
+        providers::{Format, Toml},
     };
 
     let config: gale_bot::Config = Figment::new()
         .merge(Toml::file("gale-bot.toml"))
         .merge(Toml::file("/etc/gale-bot/config.toml"))
-        .merge(Env::prefixed("GALE_BOT_"))
         .extract()?;
 
     debug!(?config, "loaded config");
@@ -73,12 +73,24 @@ async fn try_main() -> anyhow::Result<()> {
         .build()
         .context("failed to build reqwest client")?;
 
-    let state = gale_bot::State {
-        http: reqwest_client.clone(),
-        config: read_config().map(Arc::new)?,
-    };
+    let mut config = read_config()?;
 
     let token = env::var("DISCORD_TOKEN").context("DISCORD_TOKEN not set")?;
+    let webhook_secret = match env::var("WEBHOOK_SECRET") {
+        Ok(secret) => Some(GithubWebhookSecret::new(secret)),
+        Err(std::env::VarError::NotPresent) => {
+            warn!("WEBHOOK_SECRET not set, webhooks will not be verified");
+            None
+        }
+        Err(err) => return Err(err).context("failed to read WEBHOOK_SECRET"),
+    };
+
+    config.releases.webhook_secret = webhook_secret;
+
+    let state = gale_bot::State {
+        http: reqwest_client.clone(),
+        config: Arc::new(config),
+    };
 
     let http = serenity::HttpBuilder::new(token)
         .client(reqwest_client)
